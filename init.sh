@@ -5,9 +5,7 @@ if [ ! -s /etc/supervisor/conf.d/damon.conf ]; then
 
   # 设置 Github CDN 及若干变量，如是 IPv6 only 或者大陆机器，需要 Github 加速网，可自行查找放在 GH_PROXY 处 ，如 https://ghproxy.lvedong.eu.org/ ，能不用就不用，减少因加速网导致的故障。
   GH_PROXY='https://ghproxy.lvedong.eu.org/'
-  GRPC_PROXY_PORT=443
-  GRPC_PORT=5555
-  WEB_PORT=80
+  DASHBOARD_PORT=8008
   CADDY_HTTP_PORT=2052
   WORK_DIR=/dashboard
 
@@ -49,11 +47,7 @@ if [ ! -s /etc/supervisor/conf.d/damon.conf ]; then
   esac
 
   # 用户选择使用 gRPC 反代方式: Nginx / Caddy / grpcwebproxy，默认为 Caddy；如需使用 grpcwebproxy，把 REVERSE_PROXY_MODE 的值设为 nginx 或 grpcwebproxy
-  if [ "$REVERSE_PROXY_MODE" = 'grpcwebproxy' ]; then
-    wget -c ${GH_PROXY}https://github.com/fscarmen2/Argo-Nezha-Service-Container/releases/download/grpcwebproxy/grpcwebproxy-linux-$ARCH.tar.gz -qO- | tar xz -C $WORK_DIR
-    chmod +x $WORK_DIR/grpcwebproxy
-    GRPC_PROXY_RUN="$WORK_DIR/grpcwebproxy --server_tls_cert_file=$WORK_DIR/nezha.pem --server_tls_key_file=$WORK_DIR/nezha.key --server_http_tls_port=$GRPC_PROXY_PORT --backend_addr=localhost:$GRPC_PORT --backend_tls_noverify --server_http_max_read_timeout=300s --server_http_max_write_timeout=300s"
-  elif [ "$REVERSE_PROXY_MODE" = 'nginx' ]; then
+  if [ "$REVERSE_PROXY_MODE" = 'nginx' ]; then
     GRPC_PROXY_RUN='nginx -g "daemon off;"'
     cat > /etc/nginx/nginx.conf  << EOF
 user www-data;
@@ -66,24 +60,57 @@ events {
 }
 http {
   upstream grpcservers {
-    server localhost:$GRPC_PORT;
+    server localhost:$DASHBOARD_PORT;
     keepalive 1024;
   }
   server {
-    listen 127.0.0.1:$GRPC_PROXY_PORT ssl http2;
+    listen 127.0.0.1:$DASHBOARD_PORT ssl http2;
     server_name $ARGO_DOMAIN;
     ssl_certificate          $WORK_DIR/nezha.pem;
     ssl_certificate_key      $WORK_DIR/nezha.key;
     underscores_in_headers on;
-    location / {
-      grpc_read_timeout 300s;
-      grpc_send_timeout 300s;
-      grpc_socket_keepalive on;
-      grpc_pass grpc://grpcservers;
+    underscores_in_headers on;
+    set_real_ip_from 0.0.0.0/0; # 替换为你的 CDN 回源 IP 地址段
+    real_ip_header CF-Connecting-IP; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
+    # 如果你使用nginx作为最外层，把上面两行注释掉
+
+    # grpc 相关    
+    location ^~ /proto.NezhaService/ {
+        grpc_set_header Host $host;
+        grpc_set_header nz-realip $http_CF_Connecting_IP; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
+        # grpc_set_header nz-realip $remote_addr; # 如果你使用nginx作为最外层，就把上面一行注释掉，启用此行
+        grpc_read_timeout 600s;
+        grpc_send_timeout 600s;
+        grpc_socket_keepalive on;
+        client_max_body_size 10m;
+        grpc_buffer_size 4m;
+        grpc_pass grpc://dashboard;
     }
-    access_log  /dev/null;
-    error_log   /dev/null;
-  }
+    # websocket 相关
+    location ~* ^/api/v1/ws/(server|terminal|file)(.*)$ {
+        proxy_set_header Host $host;
+        proxy_set_header nz-realip $http_cf_connecting_ip; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
+        # proxy_set_header nz-realip $remote_addr; # 如果你使用nginx作为最外层，就把上面一行注释掉，启用此行
+        proxy_set_header Origin https://$host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_pass http://127.0.0.1:8008;
+    }
+    # web
+    location / {
+        proxy_set_header Host $host;
+        proxy_set_header nz-realip $http_cf_connecting_ip; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
+        # proxy_set_header nz-realip $remote_addr; # 如果你使用nginx作为最外层，就把上面一行注释掉，启用此行
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffer_size 128k;
+        proxy_buffers 4 256k;
+        proxy_busy_buffers_size 256k;
+        proxy_max_temp_file_size 0;
+        proxy_pass http://127.0.0.1:8008;
+    }
 }
 EOF
   else
@@ -92,15 +119,32 @@ EOF
     GRPC_PROXY_RUN="$WORK_DIR/caddy run --config $WORK_DIR/Caddyfile --watch"
     cat > $WORK_DIR/Caddyfile  << EOF
 {
-    http_port $CADDY_HTTP_PORT
-}
+    @grpcProto {
+        path /proto.NezhaService/*
+    }
 
-:$GRPC_PROXY_PORT {
-    reverse_proxy {
-        to localhost:$GRPC_PORT
+    reverse_proxy @grpcProto {
+        header_up Host {host}
+        header_up nz-realip {http.CF-Connecting-IP} # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
+        # header_up nz-realip {remote_host} # 如果你使用caddy作为最外层，就把上面一行注释掉，启用此行
         transport http {
-            versions h2c 2
+            versions h2c
+            read_buffer 4096
         }
+        to localhost:8008
+    }
+
+    reverse_proxy {
+        header_up Host {host}
+        header_up Origin https://{host}
+        header_up nz-realip {http.CF-Connecting-IP} # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
+        # header_up nz-realip {remote_host} # 如果你使用caddy作为最外层，就把上面一行注释掉，启用此行
+        header_up Upgrade {http.upgrade}
+        header_up Connection "upgrade"
+        transport http {
+            read_buffer 16384
+        }
+        to localhost:8008
     }
     tls $WORK_DIR/nezha.pem $WORK_DIR/nezha.key
 }
