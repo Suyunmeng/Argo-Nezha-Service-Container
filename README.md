@@ -2,7 +2,10 @@
 
 使用 Argo 隧道的哪吒服务端
 
-Documentation: [English version](https://github.com/fscarmen2/Argo-Nezha-Service-Container/blob/main/README_EN.md) | 中文版
+参考自fscarmen大佬的 Argo-Nezha-Service-Container(https://github.com/Suyunmeng/Argo-Nezha-Service-Container)
+Documentation: [English version](https://github.com/Suyunmeng/Argo-Nezha-Service-Container/blob/main/README_EN.md) | 中文版
+
+注意，该仓库为v1版本测试，尚在Dev测试阶段，不保证稳定性，尚未完善
 
 * * *
 
@@ -107,7 +110,7 @@ Argo 隧道认证方式有 json 和 token，使用两个方式其中之一。推
 
 Koyeb
 
-[![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=docker&name=nezha&ports=80;http;/&env[GH_USER]=&env[GH_CLIENTID]=&env[GH_CLIENTSECRET]=&env[GH_REPO]=&env[GH_EMAIL]=&env[GH_PAT]=&env[ARGO_AUTH]=&env[ARGO_DOMAIN]=&image=docker.io/fscarmen/argo-nezha)
+[![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=docker&name=nezha&ports=80;http;/&env[GH_USER]=&env[GH_CLIENTID]=&env[GH_CLIENTSECRET]=&env[GH_REPO]=&env[GH_EMAIL]=&env[GH_PAT]=&env[ARGO_AUTH]=&env[ARGO_DOMAIN]=&image=docker.io/cloudlinksu/argo-nezha)
 
 <img width="927" alt="image" src="https://user-images.githubusercontent.com/92626977/231088411-fbac3e6e-a8a6-4661-bcf8-7c777aa8ffeb.png">
 <img width="750" alt="image" src="https://user-images.githubusercontent.com/92626977/231088973-7134aefd-4c80-4559-8e40-17c3be11d27d.png">
@@ -140,7 +143,7 @@ docker run -dit \
            -e REVERSE_PROXY_MODE=<选填，选填，选填! 如想用 Nginx 或 gRPCwebProxy 替代 Caddy 反代的话，请设置该变量并赋值为 `nginx` 或 `grpcwebproxy`> \
            -e NO_AUTO_RENEW=<选填，选填，选填! 如果不需要自动在线同步最新的 backup.sh 和 restore.sh，请设置该变量并赋值为 `1`> \
            -e DASHBOARD_VERSION=<选填，选填，选填! 指定面板的版本，以 `v0.00.00` 的格式，后续将固定在该版本不会升级，不填则使用默认的 `v0.20.13`> \
-           fscarmen/argo-nezha
+           cloudlinksu/argo-nezha
 ```
 
 ### docker-compose 部署
@@ -151,7 +154,7 @@ networks:
         name: nezha-dashboard
 services:
     argo-nezha:
-        image: fscarmen/argo-nezha
+        image: cloudlinksu/argo-nezha
         pull_policy: always
         container_name: nezha_dashboard
         restart: always

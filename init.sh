@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+theme#!/usr/bin/env bash
 
 # 首次运行时执行以下流程，再次运行时存在 /etc/supervisor/conf.d/damon.conf 文件，直接到最后一步
 if [ ! -s /etc/supervisor/conf.d/damon.conf ]; then
@@ -6,6 +6,11 @@ if [ ! -s /etc/supervisor/conf.d/damon.conf ]; then
   # 设置 Github CDN 及若干变量，如是 IPv6 only 或者大陆机器，需要 Github 加速网，可自行查找放在 GH_PROXY 处 ，如 https://ghproxy.lvedong.eu.org/ ，能不用就不用，减少因加速网导致的故障。
   GH_PROXY='https://ghproxy.lvedong.eu.org/'
   DASHBOARD_PORT=8008
+  GRPC_PROXY_PORT=443
+  WEB_PORT=80
+  uuid=$(cat /proc/sys/kernel/random/uuid)
+  jwtsecretkey=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 1024 | head -n 1)
+  agentsecretkey=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
   CADDY_HTTP_PORT=2052
   WORK_DIR=/dashboard
 
@@ -23,7 +28,7 @@ if [ ! -s /etc/supervisor/conf.d/damon.conf ]; then
   [ -n "$GH_REPO" ] && grep -q '/' <<< "$GH_REPO" && GH_REPO=$(awk -F '/' '{print $NF}' <<< "$GH_REPO")  # 填了项目全路径的处理
 
   # 检测是否需要启用 Github CDN，如能直接连通，则不使用
-  [ -n "$GH_PROXY" ] && wget --server-response --quiet --output-document=/dev/null --no-check-certificate --tries=2 --timeout=3 https://raw.githubusercontent.com/fscarmen2/Argo-Nezha-Service-Container/main/README.md >/dev/null 2>&1 && unset GH_PROXY
+  [ -n "$GH_PROXY" ] && wget --server-response --quiet --output-document=/dev/null --no-check-certificate --tries=2 --timeout=3 https://raw.githubusercontent.com/Suyunmeng/Argo-Nezha-Service-Container/main/README.md >/dev/null 2>&1 && unset GH_PROXY
 
   # 设置 DNS
   echo -e "nameserver 127.0.0.11\nnameserver 8.8.4.4\nnameserver 223.5.5.5\nnameserver 2001:4860:4860::8844\nnameserver 2400:3200::1\n" > /etc/resolv.conf
@@ -47,7 +52,11 @@ if [ ! -s /etc/supervisor/conf.d/damon.conf ]; then
   esac
 
   # 用户选择使用 gRPC 反代方式: Nginx / Caddy / grpcwebproxy，默认为 Caddy；如需使用 grpcwebproxy，把 REVERSE_PROXY_MODE 的值设为 nginx 或 grpcwebproxy
-  if [ "$REVERSE_PROXY_MODE" = 'nginx' ]; then
+  if [ "$REVERSE_PROXY_MODE" = 'grpcwebproxy' ]; then
+    wget -c ${GH_PROXY}https://github.com/Suyunmeng/Argo-Nezha-Service-Container/releases/download/grpcwebproxy/grpcwebproxy-linux-$ARCH.tar.gz -qO- | tar xz -C $WORK_DIR
+    chmod +x $WORK_DIR/grpcwebproxy
+    GRPC_PROXY_RUN="$WORK_DIR/grpcwebproxy --server_tls_cert_file=$WORK_DIR/nezha.pem --server_tls_key_file=$WORK_DIR/nezha.key --server_http_tls_port=$GRPC_PROXY_PORT --backend_addr=localhost:$DASHBOARD_PORT --backend_tls_noverify --server_http_max_read_timeout=300s --server_http_max_write_timeout=300s"
+  elif [ "$REVERSE_PROXY_MODE" = 'nginx' ]; then
     GRPC_PROXY_RUN='nginx -g "daemon off;"'
     cat > /etc/nginx/nginx.conf  << EOF
 user www-data;
@@ -59,16 +68,20 @@ events {
         # multi_accept on;
 }
 http {
-  upstream grpcservers {
+  upstream dashboard {
     server localhost:$DASHBOARD_PORT;
-    keepalive 1024;
+    keepalive 512;
   }
   server {
-    listen 127.0.0.1:$DASHBOARD_PORT ssl http2;
+    listen 127.0.0.1:$GRPC_PROXY_PORT ssl http2;
     server_name $ARGO_DOMAIN;
     ssl_certificate          $WORK_DIR/nezha.pem;
     ssl_certificate_key      $WORK_DIR/nezha.key;
-    underscores_in_headers on;
+    ssl_stapling on;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:10m; # 如果与其他配置冲突，请注释此项
+    ssl_protocols TLSv1.2 TLSv1.3;
+
     underscores_in_headers on;
     set_real_ip_from 0.0.0.0/0; # 替换为你的 CDN 回源 IP 地址段
     real_ip_header CF-Connecting-IP; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
@@ -96,7 +109,7 @@ http {
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
-        proxy_pass http://127.0.0.1:8008;
+        proxy_pass http://127.0.0.1:$DASHBOARD_PORT;
     }
     # web
     location / {
@@ -109,7 +122,7 @@ http {
         proxy_buffers 4 256k;
         proxy_busy_buffers_size 256k;
         proxy_max_temp_file_size 0;
-        proxy_pass http://127.0.0.1:8008;
+        proxy_pass http://127.0.0.1:$DASHBOARD_PORT;
     }
 }
 EOF
@@ -119,6 +132,10 @@ EOF
     GRPC_PROXY_RUN="$WORK_DIR/caddy run --config $WORK_DIR/Caddyfile --watch"
     cat > $WORK_DIR/Caddyfile  << EOF
 {
+    http_port $CADDY_HTTP_PORT
+}
+
+:$GRPC_PROXY_PORT{
     @grpcProto {
         path /proto.NezhaService/*
     }
@@ -131,9 +148,8 @@ EOF
             versions h2c
             read_buffer 4096
         }
-        to localhost:8008
+        to localhost:$DASHBOARD_PORT
     }
-
     reverse_proxy {
         header_up Host {host}
         header_up Origin https://{host}
@@ -144,7 +160,7 @@ EOF
         transport http {
             read_buffer 16384
         }
-        to localhost:8008
+        to localhost:$DASHBOARD_PORT
     }
     tls $WORK_DIR/nezha.pem $WORK_DIR/nezha.key
 }
@@ -152,48 +168,65 @@ EOF
   fi
 
   # 下载需要的应用
-  if [ -z "$DASHBOARD_VERSION" ]; then
-    DASHBOARD_LATEST='v0.20.13'
-  elif [[ "$DASHBOARD_VERSION" =~ 0\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
-    DASHBOARD_LATEST=$(sed 's/v//; s/^/v&/' <<< "$DASHBOARD_VERSION")
-  else
-    error "The DASHBOARD_VERSION variable should be in a format like v0.00.00, please check."
-  fi
+  DASHBOARD_LATEST=$(wget -qO- "${GH_PROXY}https://api.github.com/repos/naiba/nezha/releases/latest" | awk -F '"' '/"tag_name"/{print $4}')
   wget -O /tmp/dashboard.zip ${GH_PROXY}https://github.com/naiba/nezha/releases/download/$DASHBOARD_LATEST/dashboard-linux-$ARCH.zip
   unzip -o /tmp/dashboard.zip -d /tmp
   chmod +x /tmp/dashboard-linux-$ARCH
   mv -f /tmp/dashboard-linux-$ARCH $WORK_DIR/app
   wget -qO $WORK_DIR/cloudflared ${GH_PROXY}https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$ARCH
-  wget -O $WORK_DIR/nezha-agent.zip ${GH_PROXY}https://github.com/nezhahq/agent/releases/download/v0.20.5/nezha-agent_linux_$ARCH.zip
+  mkdir $WORK_DIR/agent
+  wget -O $WORK_DIR/nezha-agent.zip ${GH_PROXY}https://github.com/nezhahq/agent/releases/latest/download/nezha-agent_linux_$ARCH.zip
   unzip -o $WORK_DIR/nezha-agent.zip -d $WORK_DIR/
   rm -rf $WORK_DIR/nezha-agent.zip /tmp/dist /tmp/dashboard.zip
 
   # 根据参数生成哪吒服务端配置文件
   [ ! -d data ] && mkdir data
   cat > ${WORK_DIR}/data/config.yaml << EOF
-Debug: false
-HTTPPort: $WEB_PORT
-Language: zh-CN
-GRPCPort: $GRPC_PORT
-GRPCHost: $ARGO_DOMAIN
-ProxyGRPCPort: $GRPC_PROXY_PORT
-TLS: true
-Oauth2:
-  Type: "github" #Oauth2 登录接入类型，github/gitlab/jihulab/gitee/gitea ## Argo-容器版本只支持 github
-  Admin: "$GH_USER" #管理员列表，半角逗号隔开
-  ClientID: "$GH_CLIENTID" # 在 ${GH_PROXY}https://github.com/settings/developers 创建，无需审核 Callback 填 http(s)://域名或IP/oauth2/callback
-  ClientSecret: "$GH_CLIENTSECRET"
-  Endpoint: "" # 如gitea自建需要设置 ## Argo-容器版本只支持 github
-site:
-  Brand: "Nezha Probe"
-  Cookiename: "nezha-dashboard" #浏览器 Cookie 字段名，可不改
-  Theme: "default"
+debug: false
+realipheader: CF-Connecting-IP
+language: zh-CN
+sitename: Nezha Dashboard
+jwtsecretkey: $jwtsecretkey
+agentsecretkey: $agentsecretkey
+listenport: $DASHBOARD_PORT
+listenhost: localhost
+installhost: $ARGO_DOMAIN
+tls: true
+location: Asia/Shanghai
+enableplainipinnotification: false
+enableipchangenotification: false
+ipchangenotificationgroupid: 0
+cover: 1
+ignoredipnotification: ""
+ignoredipnotificationserverids: {}
+avgpingcount: 2
+dnsservers: ""
+customcode: ""
+customcodedashboard: ""
 EOF
 
-  # 下载包含本地数据的 sqlite.db 文件，生成18位随机字符串用于本地 Token
-  wget -P ${WORK_DIR}/data/ ${GH_PROXY}https://github.com/fscarmen2/Argo-Nezha-Service-Container/raw/main/sqlite.db
-  LOCAL_TOKEN=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 18)
-  sqlite3 ${WORK_DIR}/data/sqlite.db "update servers set secret='${LOCAL_TOKEN}' where created_at='2023-04-23 13:02:00.770756566+08:00'"
+  # 根据参数生成哪吒服务端配置文件
+  [ ! -e $WORK_DIR/agent/agent.yml ] && cat > ${WORK_DIR}/agent/agent.yml << EOF
+client_secret: "$agentsecretkey"
+debug: false
+disable_auto_update: false
+disable_command_execute: false
+disable_force_update: false
+disable_nat: false
+disable_send_query: false
+gpu: false
+insecure_tls: true
+ip_report_period: 1800
+report_delay: 3
+server: "localhost:8008"
+skip_connection_count: false
+skip_procs_count: false
+temperature: false
+tls: true
+use_gitee_to_upgrade: false
+use_ipv6_country_code: false
+uuid: "$uuid"
+EOF
 
   # SSH path 与 GH_CLIENTSECRET 一样
   echo root:"$GH_CLIENTSECRET" | chpasswd root
@@ -223,7 +256,7 @@ ingress:
     service: ssh://localhost:22
     path: /$GH_CLIENTID/*
   - hostname: $ARGO_DOMAIN
-    service: http://localhost:$WEB_PORT
+    service: http://localhost:$DASHBOARD_PORT
   - service: http_status:404
 EOF
 
@@ -258,7 +291,7 @@ DASHBOARD_VERSION=$DASHBOARD_VERSION
 EOF
 
   # 生成 backup.sh 文件的步骤2 - 在线获取 template/bakcup.sh 模板生成完整 backup.sh 文件
-  wget -qO- ${GH_PROXY}https://raw.githubusercontent.com/fscarmen2/Argo-Nezha-Service-Container/main/template/backup.sh | sed '1,/^########/d' >> $WORK_DIR/backup.sh
+  wget -qO- ${GH_PROXY}https://raw.githubusercontent.com/Suyunmeng/Argo-Nezha-Service-Container/main/template/backup.sh | sed '1,/^########/d' >> $WORK_DIR/backup.sh
 
   if [[ -n "$GH_BACKUP_USER" && -n "$GH_EMAIL" && -n "$GH_REPO" && -n "$GH_PAT" ]]; then
     # 生成 restore.sh 文件的步骤1 - 设置环境变量
@@ -280,7 +313,7 @@ IS_DOCKER=1
 EOF
 
     # 生成 restore.sh 文件的步骤2 - 在线获取 template/restore.sh 模板生成完整 restore.sh 文件
-    wget -qO- ${GH_PROXY}https://raw.githubusercontent.com/fscarmen2/Argo-Nezha-Service-Container/main/template/restore.sh | sed '1,/^########/d' >> $WORK_DIR/restore.sh
+    wget -qO- ${GH_PROXY}https://raw.githubusercontent.com/Suyunmeng/Argo-Nezha-Service-Container/main/template/restore.sh | sed '1,/^########/d' >> $WORK_DIR/restore.sh
   fi
 
   # 生成 renew.sh 文件的步骤1 - 设置环境变量
@@ -295,7 +328,7 @@ TEMP_DIR=/tmp/renew
 EOF
 
   # 生成 renew.sh 文件的步骤2 - 在线获取 template/renew.sh 模板生成完整 renew.sh 文件
-  wget -qO- ${GH_PROXY}https://raw.githubusercontent.com/fscarmen2/Argo-Nezha-Service-Container/main/template/renew.sh | sed '1,/^########/d' >> $WORK_DIR/renew.sh
+  wget -qO- ${GH_PROXY}https://raw.githubusercontent.com/Suyunmeng/Argo-Nezha-Service-Container/main/template/renew.sh | sed '1,/^########/d' >> $WORK_DIR/renew.sh
 
   # 生成定时任务: 1.每天北京时间 3:30:00 更新备份和还原文件，2.每天北京时间 4:00:00 备份一次，并重启 cron 服务； 3.每分钟自动检测在线备份文件里的内容
   [ -z "$NO_AUTO_RENEW" ] && [ -s $WORK_DIR/renew.sh ] && ! grep -q "$WORK_DIR/renew.sh" /etc/crontab && echo "30 3 * * * root bash $WORK_DIR/renew.sh" >> /etc/crontab
@@ -325,7 +358,7 @@ stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 
 [program:agent]
-command=$WORK_DIR/nezha-agent -s localhost:$GRPC_PORT -p $LOCAL_TOKEN --disable-auto-update
+command=$WORK_DIR/nezha-agent -c $WORK_DIR/agent/agent.yml
 autostart=true
 autorestart=true
 stderr_logfile=/dev/null
