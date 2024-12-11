@@ -135,7 +135,7 @@ EOF
     http_port $CADDY_HTTP_PORT
 }
 
-:$GRPC_PROXY_PORT{
+:$GRPC_PROXY_PORT {
     @grpcProto {
         path /proto.NezhaService/*
     }
