@@ -229,7 +229,7 @@ uuid: "$uuid"
 EOF
 
   # 下载包含本地数据的 sqlite.db 文件，生成18位随机字符串用于本地 Token
-  wget -P ${WORK_DIR}/data/ ${GH_PROXY}https://github.com/Suyunmeng/Argo-Nezha-Service-Container/raw/main/sqlite.db
+  wget -P ${WORK_DIR}/data/ ${GH_PROXY}https://github.com/Suyunmeng/Argo-Nezha-Service-Container/raw/v1/sqlite.db
   sqlite3 ${WORK_DIR}/data/sqlite.db "update servers set uuid='${uuid}' where created_at='2024-12-11 15:19:41.6189758+08:00'"
 
   # SSH path 与 GH_CLIENTSECRET 一样
