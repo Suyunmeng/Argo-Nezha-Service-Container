@@ -356,15 +356,15 @@ stdout_logfile=/dev/null
 
 [program:nezha]
 command=$WORK_DIR/app
-autostart=false
-autorestart=false
+autostart=true
+autorestart=true
 stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 
 [program:agent]
 command=$WORK_DIR/nezha-agent -c $WORK_DIR/agent/agent.yml
-autostart=true
-autorestart=true
+autostart=false
+autorestart=false
 stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 
