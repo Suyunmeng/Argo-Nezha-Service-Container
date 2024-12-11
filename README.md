@@ -2,7 +2,7 @@
 
 使用 Argo 隧道的哪吒服务端
 
-参考自fscarmen大佬的 Argo-Nezha-Service-Container(https://github.com/Suyunmeng/Argo-Nezha-Service-Container)
+参考自fscarmen大佬的 [Argo-Nezha-Service-Container](https://github.com/fscarmen2/Argo-Nezha-Service-Container)
 Documentation: [English version](https://github.com/Suyunmeng/Argo-Nezha-Service-Container/blob/main/README_EN.md) | 中文版
 
 注意，该仓库为v1版本测试，尚在Dev测试阶段，不保证稳定性，尚未完善
