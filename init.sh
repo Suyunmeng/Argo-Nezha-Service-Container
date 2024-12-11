@@ -208,7 +208,7 @@ EOF
   # 根据参数生成哪吒服务端配置文件
   [ ! -e $WORK_DIR/agent/agent.yml ] && cat > ${WORK_DIR}/agent/agent.yml << EOF
 client_secret: "$agentsecretkey"
-debug: false
+debug: true
 disable_auto_update: false
 disable_command_execute: false
 disable_force_update: false
@@ -356,8 +356,8 @@ stdout_logfile=/dev/null
 
 [program:nezha]
 command=$WORK_DIR/app
-autostart=true
-autorestart=true
+autostart=false
+autorestart=fasle
 stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 
