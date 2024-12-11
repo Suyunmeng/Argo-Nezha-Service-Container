@@ -357,7 +357,7 @@ stdout_logfile=/dev/null
 [program:nezha]
 command=$WORK_DIR/app
 autostart=false
-autorestart=fasle
+autorestart=false
 stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 
