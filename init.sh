@@ -189,7 +189,7 @@ sitename: Nezha Dashboard
 jwtsecretkey: $jwtsecretkey
 agentsecretkey: $agentsecretkey
 listenport: $DASHBOARD_PORT
-listenhost: localhost
+listenhost: 
 installhost: $ARGO_DOMAIN
 tls: true
 location: Asia/Shanghai
