@@ -183,7 +183,7 @@ EOF
   [ ! -d data ] && mkdir data
   cat > ${WORK_DIR}/data/config.yaml << EOF
 debug: false
-realipheader: CF-Connecting-IP
+realipheader: 
 language: zh-CN
 sitename: Nezha Dashboard
 jwtsecretkey: $jwtsecretkey
