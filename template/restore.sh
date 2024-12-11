@@ -144,6 +144,14 @@ if [ -e $TEMP_DIR/backup.tar.gz ]; then
 
   [[ "$(awk '{print $NF}' <<< "$CONFIG_AVGPINGCOUNT")" =~ ^[0-9]+$ ]] && sed -i "s@avgpingcount:.*@$CONFIG_AVGPINGCOUNT@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
 
+  # 如果是容器版本会有本地的客户端探针，Token 将是当前部署时生成的18位随机字符串，还原的时候，会把 sqlite.db 里的历史 Token 更换为新的。
+  if [ "$IS_DOCKER" = 1 ]; then
+    [ $(type -p sqlite3) ] || apt-get -y install sqlite3
+    DB_TOKEN=$(awk -F ': ' '/^agentsecretkey:/ {print $2}' ${TEMP_DIR}/${FILE_PATH}data/config.yaml)
+    [ -n "$DB_TOKEN" ] && LOCAL_TOKEN=$(awk -F ': ' '/^client_secret:/ {print $2}' /dashboard/agent/agent.yml)
+    [ "$DB_TOKEN" != "$LOCAL_TOKEN" ] && UID=$(awk -F ': ' '/^uuid:/ {print $2}' /dashboard/agent/agent.yml && sed -i "s/^client_secret: .*/uuid: ${UID}/" "/dashboard/agent/agent.yml" && sed -i "s/^client_secret: .*/client_secret: ${DB_TOKEN}/" "/dashboard/agent/agent.yml"
+  fi
+
   # 复制临时文件到正式的工作文件夹
   cp -rf ${TEMP_DIR}/${FILE_PATH}data/* ${WORK_DIR}/data/
   cp -rf ${TEMP_DIR}/${FILE_PATH}agent/* ${WORK_DIR}/agent/
