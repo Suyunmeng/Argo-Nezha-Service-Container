@@ -218,7 +218,7 @@ gpu: false
 insecure_tls: true
 ip_report_period: 1800
 report_delay: 3
-server: "localhost:443"
+server: "localhost:$GRPC_PROXY_PORT"
 skip_connection_count: false
 skip_procs_count: false
 temperature: false
