@@ -103,7 +103,7 @@ http {
     location ~* ^/api/v1/ws/(server|terminal|file)(.*)$ {
         proxy_set_header Host $host;
         proxy_set_header nz-realip $http_cf_connecting_ip; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
-        # proxy_set_header nz-realip $remote_addr; # 如果你使用nginx作为最外层，就把上面一行注释掉，启用此行
+        proxy_set_header nz-realip $remote_addr; # 如果你使用nginx作为最外层，就把上面一行注释掉，启用此行
         proxy_set_header Origin https://$host;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -115,7 +115,7 @@ http {
     location / {
         proxy_set_header Host $host;
         proxy_set_header nz-realip $http_cf_connecting_ip; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
-        # proxy_set_header nz-realip $remote_addr; # 如果你使用nginx作为最外层，就把上面一行注释掉，启用此行
+        proxy_set_header nz-realip $remote_addr; # 如果你使用nginx作为最外层，就把上面一行注释掉，启用此行
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
         proxy_buffer_size 128k;
@@ -143,7 +143,7 @@ EOF
     reverse_proxy @grpcProto {
         header_up Host {host}
         header_up nz-realip {http.CF-Connecting-IP} # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
-        # header_up nz-realip {remote_host} # 如果你使用caddy作为最外层，就把上面一行注释掉，启用此行
+        header_up nz-realip {remote_host} # 如果你使用caddy作为最外层，就把上面一行注释掉，启用此行
         transport http {
             versions h2c
             read_buffer 4096
@@ -154,7 +154,7 @@ EOF
         header_up Host {host}
         header_up Origin https://{host}
         header_up nz-realip {http.CF-Connecting-IP} # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
-        # header_up nz-realip {remote_host} # 如果你使用caddy作为最外层，就把上面一行注释掉，启用此行
+        header_up nz-realip {remote_host} # 如果你使用caddy作为最外层，就把上面一行注释掉，启用此行
         header_up Upgrade {http.upgrade}
         header_up Connection "upgrade"
         transport http {
@@ -183,7 +183,7 @@ EOF
   [ ! -d data ] && mkdir data
   cat > ${WORK_DIR}/data/config.yaml << EOF
 debug: false
-realipheader: 
+realipheader: nz-realip 
 language: zh-CN
 sitename: Nezha Dashboard
 jwtsecretkey: $jwtsecretkey
@@ -218,11 +218,11 @@ gpu: false
 insecure_tls: true
 ip_report_period: 1800
 report_delay: 3
-server: "localhost:8008"
+server: "localhost:443"
 skip_connection_count: false
 skip_procs_count: false
 temperature: false
-tls: false
+tls: true
 use_gitee_to_upgrade: false
 use_ipv6_country_code: false
 uuid: "$uuid"
