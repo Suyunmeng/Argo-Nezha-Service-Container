@@ -176,7 +176,7 @@ EOF
   [ ! -d data ] && mkdir data
   cat > ${WORK_DIR}/data/config.yaml << EOF
 debug: false
-realipheader:  
+realipheader: "" 
 language: zh-CN
 sitename: Nezha Dashboard
 jwtsecretkey: $jwtsecretkey
