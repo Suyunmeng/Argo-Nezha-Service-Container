@@ -121,25 +121,6 @@ http {
         proxy_pass http://127.0.0.1:$DASHBOARD_PORT;
     }
   }
-  server {
-    listen $WEB_PORT;
-    server_name $ARGO_DOMAIN;
-
-    underscores_in_headers on;
-    set_real_ip_from 0.0.0.0/0; # 替换为你的 CDN 回源 IP 地址段
-    real_ip_header CF-Connecting-IP; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
-    # 如果你使用nginx作为最外层，把上面两行注释掉
-
-    location / {
-        proxy_set_header Host $host;
-        proxy_set_header nz-realip $http_cf_connecting_ip; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
-        proxy_set_header nz-realip $remote_addr; # 如果你使用nginx作为最外层，就把上面一行注释掉，启用此行
-        proxy_set_header Origin http://$host;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";;
-        proxy_pass http://dashboard;
-    }
-  }
 }
 EOF
   else
@@ -147,21 +128,6 @@ EOF
     wget -c ${GH_PROXY}https://github.com/caddyserver/caddy/releases/download/v${CADDY_LATEST}/caddy_${CADDY_LATEST}_linux_${ARCH}.tar.gz -qO- | tar xz -C $WORK_DIR caddy
     GRPC_PROXY_RUN="$WORK_DIR/caddy run --config $WORK_DIR/Caddyfile --watch"
     cat > $WORK_DIR/Caddyfile  << EOF
-:$WEB_PORT {
-    reverse_proxy {
-        header_up Host {host}
-        header_up Origin http://{host}
-        header_up nz-realip {http.CF-Connecting-IP} # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
-        header_up nz-realip {remote_host} # 如果你使用caddy作为最外层，就把上面一行注释掉，启用此行
-        header_up Upgrade {http.upgrade}
-        header_up Connection "upgrade"
-        transport http {
-            read_buffer 16384
-        }
-        to localhost:$DASHBOARD_PORT
-    }
-}
-
 :$GRPC_PROXY_PORT {
     @grpcProto {
         path /proto.NezhaService/*
@@ -210,7 +176,7 @@ EOF
   [ ! -d data ] && mkdir data
   cat > ${WORK_DIR}/data/config.yaml << EOF
 debug: false
-realipheader: nz-realip 
+realipheader:  
 language: zh-CN
 sitename: Nezha Dashboard
 jwtsecretkey: $jwtsecretkey
