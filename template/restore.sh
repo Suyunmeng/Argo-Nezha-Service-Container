@@ -149,12 +149,11 @@ if [ -e $TEMP_DIR/backup.tar.gz ]; then
     [ $(type -p sqlite3) ] || apt-get -y install sqlite3
     DB_TOKEN=$(awk -F ': ' '/^agentsecretkey:/ {print $2}' ${TEMP_DIR}/${FILE_PATH}data/config.yaml)
     [ -n "$DB_TOKEN" ] && LOCAL_TOKEN=$(awk -F ': ' '/^client_secret:/ {print $2}' /dashboard/agent/agent.yml)
-    [ "$DB_TOKEN" != "$LOCAL_TOKEN" ] && UID=$(sqlite3 ${TEMP_DIR}/${FILE_PATH}data/sqlite.db "select uuid where created_at='2024-12-11 15:19:41.6189758+08:00'") && sed -i "s/^client_secret: .*/uuid: ${UID}/" "/dashboard/agent/agent.yml" && sed -i "s/^client_secret: .*/client_secret: ${DB_TOKEN}/" "/dashboard/agent/agent.yml"
+    [ "$DB_TOKEN" != "$LOCAL_TOKEN" ] && UID=$(awk -F ': ' '/^uuid:/ {print substr($2, 2, length($2)-2)}' /dashboard/agent/agent.yml) && sqlite3 ${TEMP_DIR}/${FILE_PATH}data/sqlite.db "update servers set uuid='${UID}' where created_at='2024-12-11 15:19:41.6189758+08:00'" && sed -i "s/^client_secret: .*/client_secret: ${DB_TOKEN}/" "/dashboard/agent/agent.yml"
   fi
 
   # 复制临时文件到正式的工作文件夹
   cp -rf ${TEMP_DIR}/${FILE_PATH}data/* ${WORK_DIR}/data/
-  cp -rf ${TEMP_DIR}/${FILE_PATH}agent/* ${WORK_DIR}/agent/
   [ -d ${TEMP_DIR}/${FILE_PATH}resource ] && cp -rf ${TEMP_DIR}/${FILE_PATH}resource ${WORK_DIR}
   rm -rf ${TEMP_DIR}
 
