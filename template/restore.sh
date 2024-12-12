@@ -119,7 +119,7 @@ wget --header="Authorization: token $GH_PAT" --header='Accept: application/vnd.g
 
 if [ -e $TEMP_DIR/backup.tar.gz ]; then
   if [ "$IS_DOCKER" = 1 ]; then
-    hint "\n$(supervisorctl stop agent nezha grpcproxy)\n"
+    hint "\n$(supervisorctl stop agent nezha)\n"
   else
     hint "\n Stop Nezha-dashboard \n" && cmd_systemctl disable
   fi
@@ -161,7 +161,7 @@ if [ -e $TEMP_DIR/backup.tar.gz ]; then
   echo "$ONLINE" > $WORK_DIR/dbfile
   rm -f $TEMP_DIR/backup.tar.gz
   if [ "$IS_DOCKER" = 1 ]; then
-    hint "\n$(supervisorctl start agent nezha grpcproxy)\n"
+    hint "\n$(supervisorctl start agent nezha)\n"
   else
     hint "\n Start Nezha-dashboard \n" && cmd_systemctl enable >/dev/null 2>&1
   fi
