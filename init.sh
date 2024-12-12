@@ -176,7 +176,7 @@ EOF
   [ ! -d data ] && mkdir data
   cat > ${WORK_DIR}/data/config.yaml << EOF
 debug: false
-realipheader: "" 
+realipheader: ""  
 language: zh-CN
 sitename: Nezha Dashboard
 jwtsecretkey: $jwtsecretkey
@@ -356,8 +356,8 @@ stdout_logfile=/dev/null
 
 [program:agent]
 command=$WORK_DIR/nezha-agent -c $WORK_DIR/agent/agent.yml
-autostart=false
-autorestart=false
+autostart=true
+autorestart=true
 stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 
