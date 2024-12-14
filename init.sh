@@ -52,7 +52,11 @@ if [ ! -s /etc/supervisor/conf.d/damon.conf ]; then
   esac
 
   # 用户选择使用 gRPC 反代方式: Nginx / Caddy，默认为 Caddy；如需使用 nginx，把 REVERSE_PROXY_MODE 的值设为 nginx
-  if [ "$REVERSE_PROXY_MODE" = 'nginx' ]; then
+  if [ "$REVERSE_PROXY_MODE" = 'grpcwebproxy' ]; then
+    wget -c ${GH_PROXY}https://github.com/fscarmen2/Argo-Nezha-Service-Container/releases/download/grpcwebproxy/grpcwebproxy-linux-$ARCH.tar.gz -qO- | tar xz -C $WORK_DIR
+    chmod +x $WORK_DIR/grpcwebproxy
+    GRPC_PROXY_RUN="$WORK_DIR/grpcwebproxy --server_tls_cert_file=$WORK_DIR/nezha.pem --server_tls_key_file=$WORK_DIR/nezha.key --server_http_tls_port=$GRPC_PROXY_PORT --backend_addr=localhost:$DASHBOARD_PORT --backend_tls_noverify --server_http_max_read_timeout=300s --server_http_max_write_timeout=300s"
+  elif [ "$REVERSE_PROXY_MODE" = 'nginx' ]; then
     GRPC_PROXY_RUN='nginx -g "daemon off;"'
     cat > /etc/nginx/nginx.conf  << EOF
 user www-data;
