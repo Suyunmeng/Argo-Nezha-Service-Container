@@ -119,7 +119,7 @@ wget --header="Authorization: token $GH_PAT" --header='Accept: application/vnd.g
 
 if [ -e $TEMP_DIR/backup.tar.gz ]; then
   if [ "$IS_DOCKER" = 1 ]; then
-    hint "\n$(supervisorctl stop agent nezha)\n"
+    hint "\n$(supervisorctl stop agent nezha grpcproxy)\n"
   else
     hint "\n Stop Nezha-dashboard \n" && cmd_systemctl disable
   fi
@@ -132,7 +132,7 @@ if [ -e $TEMP_DIR/backup.tar.gz ]; then
   CUSTOM_PATH=($(sed -n "/custom/s#$FILE_PATH\(.*custom\)/.*#\1#gp" <<< "$FILE_LIST" | sort -u))
   [ ${#CUSTOM_PATH[@]} -gt 0 ] && CUSTOM_FULL_PATH=($(for k in ${CUSTOM_PATH[@]}; do echo ${FILE_PATH}${k}; done))
   echo "↓↓↓↓↓↓↓↓↓↓ Restore-file list ↓↓↓↓↓↓↓↓↓↓"
-  tar xzvf $TEMP_DIR/backup.tar.gz -C $TEMP_DIR ${CUSTOM_FULL_PATH[@]} ${FILE_PATH}data ${FILE_PATH}agent
+  tar xzvf $TEMP_DIR/backup.tar.gz -C $TEMP_DIR ${CUSTOM_FULL_PATH[@]} ${FILE_PATH}data
   echo -e "↑↑↑↑↑↑↑↑↑↑ Restore-file list ↑↑↑↑↑↑↑↑↑↑\n\n"
 
   # 还原面板配置的最新信息
@@ -161,7 +161,7 @@ if [ -e $TEMP_DIR/backup.tar.gz ]; then
   echo "$ONLINE" > $WORK_DIR/dbfile
   rm -f $TEMP_DIR/backup.tar.gz
   if [ "$IS_DOCKER" = 1 ]; then
-    hint "\n$(supervisorctl start agent nezha)\n"
+    hint "\n$(supervisorctl start agent nezha grpcproxy)\n"
   else
     hint "\n Start Nezha-dashboard \n" && cmd_systemctl enable >/dev/null 2>&1
   fi
