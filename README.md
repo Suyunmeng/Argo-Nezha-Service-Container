@@ -5,7 +5,7 @@
 参考自fscarmen大佬的 [Argo-Nezha-Service-Container](https://github.com/fscarmen2/Argo-Nezha-Service-Container)
 Documentation: [English version](https://github.com/Suyunmeng/Argo-Nezha-Service-Container/blob/main/README_EN.md) | 中文版
 
-注意，该仓库为v1版本测试，尚在Dev测试阶段，不保证稳定性，尚未完善
+注意，该仓库为v1版本,注意！v1版本不兼容原v0配置，不可使用原备份仓库的备份直接恢复数据，如想使用v0数据，请使用v0版本
 
 * * *
 
