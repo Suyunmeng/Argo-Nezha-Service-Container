@@ -91,7 +91,7 @@ CONFIG_REALIP=$(grep -i '^realipheader:' <<< "$CONFIG_YAML")
 if [ -s $WORK_DIR/dbfile ]; then
   CONFIG_BRAND=$(grep -i '^sitename:' <<< "$CONFIG_YAML")
   CONFIG_THEME=$(grep -i '^usertemplate:' <<< "$CONFIG_YAML")
-  CONFIG_AVGPINGCOUNT=$(grep -i 'avgpingcount:' <<< "$CONFIG_YAML")
+  CONFIG_AVGPINGCOUNT=$(grep -i '^avgpingcount:' <<< "$CONFIG_YAML")
 fi
 
 # 根据传参标志作相应的处理
@@ -136,13 +136,13 @@ if [ -e $TEMP_DIR/backup.tar.gz ]; then
   echo -e "↑↑↑↑↑↑↑↑↑↑ Restore-file list ↑↑↑↑↑↑↑↑↑↑\n\n"
 
   # 还原面板配置的最新信息
-  sed -i "s@realipheader:.*@$CONFIG_REALIP@; s@language:.*@$CONFIG_LANGUAGE@; s@^sitename:.*@$CONFIG_BRAND@; s@listenport:.*@$CONFIG_LISTENPORT@; s@listenhost:.*@$CONFIG_LISTENHOST@I" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
+  sed -i "s@^realipheader:.*@$CONFIG_REALIP@; s@^language:.*@$CONFIG_LANGUAGE@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
 
   # 逻辑是安装首次使用备份文件里的主题信息，之后使用本地最新的主题信息和 MaxTCPPingValue, AvgPingCount
   [[ -n "$CONFIG_BRAND" && -n "$CONFIG_THEME" ]] &&
   sed -i "s@sitename:.*@$CONFIG_BRAND@; s@theme:.*@$CONFIG_THEME@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
 
-  [[ "$(awk '{print $NF}' <<< "$CONFIG_AVGPINGCOUNT")" =~ ^[0-9]+$ ]] && sed -i "s@avgpingcount:.*@$CONFIG_AVGPINGCOUNT@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
+  [[ "$(awk '{print $NF}' <<< "$CONFIG_AVGPINGCOUNT")" =~ ^[0-9]+$ ]] && sed -i "s@^avgpingcount:.*@$CONFIG_AVGPINGCOUNT@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
 
   # 如果是容器版本会有本地的客户端探针，Token 将是当前部署时生成的18位随机字符串，还原的时候，会把 sqlite.db 里的历史 Token 更换为新的。
   if [ "$IS_DOCKER" = 1 ]; then
