@@ -1,4 +1,4 @@
-FROM debian
+FROM node:20.18.1-bookworm-slim
 
 WORKDIR /dashboard
 
