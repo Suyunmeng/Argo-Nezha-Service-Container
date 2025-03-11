@@ -136,11 +136,11 @@ if [ -e $TEMP_DIR/backup.tar.gz ]; then
   echo -e "↑↑↑↑↑↑↑↑↑↑ Restore-file list ↑↑↑↑↑↑↑↑↑↑\n\n"
 
   # 还原面板配置的最新信息
-  sed -i "s@^realipheader:.*@$CONFIG_REALIP@; s@^language:.*@$CONFIG_LANGUAGE@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
+  sed -i "s@^realipheader:.*@$CONFIG_REALIP@; s@^language:.*@$CONFIG_LANGUAGE@; s@clientsecret:.*@clientsecret: \"$GH_CLIENTSECRET\"@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
 
   # 逻辑是安装首次使用备份文件里的主题信息，之后使用本地最新的主题信息和 MaxTCPPingValue, AvgPingCount
   [[ -n "$CONFIG_BRAND" && -n "$CONFIG_THEME" ]] &&
-  sed -i "s@sitename:.*@$CONFIG_BRAND@; s@theme:.*@$CONFIG_THEME@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
+  sed -i "s@sitename:.*@$CONFIG_BRAND@; s@theme:.*@$CONFIG_THEME@; s@clientid:.*@clientid: \"$GH_CLIENTID\"@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
 
   [[ "$(awk '{print $NF}' <<< "$CONFIG_AVGPINGCOUNT")" =~ ^[0-9]+$ ]] && sed -i "s@^avgpingcount:.*@$CONFIG_AVGPINGCOUNT@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
 
