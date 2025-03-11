@@ -204,9 +204,18 @@ avgpingcount: 2
 dnsservers: ""
 customcode: ""
 customcodedashboard: ""
+oauth2:
+  GitHub:
+    clientid: "$GH_CLIENTID"
+    clientsecret: "$GH_CLIENTSECRET"
+    endpoint:
+      authurl: "https://github.com/login/oauth/authorize"
+      tokenurl: "https://github.com/login/oauth/access_token"
+    userinfourl: "https://api.github.com/user"
+    useridpath: "id"
 EOF
 
-  # 根据参数生成哪吒服务端配置文件
+  # 根据参数生成哪吒客户端配置文件
   [ ! -e $WORK_DIR/agent/agent.yml ] && cat > ${WORK_DIR}/agent/agent.yml << EOF
 client_secret: "$agentsecretkey"
 debug: true
