@@ -100,6 +100,22 @@ if [[ "$DASHBOARD_VERSION" =~ 0\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
     CONFIG_AVGPINGCOUNT=$(grep -i 'AvgPingCount:' <<< "$CONFIG_YAML")
     CONFIG_MAXTCPPINGVALUE=$(grep -i 'MaxTCPPingValue:' <<< "$CONFIG_YAML")
   fi
+else
+  # 读取面板现配置信息
+  CONFIG_YAML=$(cat $WORK_DIR/data/config.yaml)
+  CONFIG_LISTENPORT=$(grep -i '^listen_port:' <<< "$CONFIG_YAML")
+  CONFIG_LANGUAGE=$(grep -i '^language:' <<< "$CONFIG_YAML")
+  CONFIG_INSTALLHOST=$(grep -i '^install_host:' <<< "$CONFIG_YAML")
+  CONFIG_REALIP=$(grep -i '^web_real_ip_header:' <<< "$CONFIG_YAML")
+  CONFIG_CLIENTID=$(sed -n '/client_id:/ s/^[ ]*client_id:[ ]*"\([^"]*\)".*/\1/p' <<< "$CONFIG_YAML")
+  CONFIG_CLIENTSECRET=$(sed -n '/client_secret:/ s/^[ ]*client_secret:[ ]*"\([^"]*\)".*/\1/p' <<< "$CONFIG_YAML")
+
+  # 如 dbfile 不为空，即不是首次安装，记录当前面板的主题等信息
+  if [ -s $WORK_DIR/dbfile ]; then
+    CONFIG_BRAND=$(grep -i '^site_name:' <<< "$CONFIG_YAML")
+    CONFIG_THEME=$(grep -i '^user_template:' <<< "$CONFIG_YAML")
+    CONFIG_AVGPINGCOUNT=$(grep -i '^avg_ping_count:' <<< "$CONFIG_YAML")
+  fi
 fi
 
 # 根据传参标志作相应的处理
@@ -161,6 +177,23 @@ if [ -e $TEMP_DIR/backup.tar.gz ]; then
       DB_TOKEN=$(sqlite3 ${TEMP_DIR}/${FILE_PATH}data/sqlite.db "select secret from servers where created_at='2023-04-23 13:02:00.770756566+08:00'")
       [ -n "$DB_TOKEN" ] && LOCAL_TOKEN=$(awk '/nezha-agent -s localhost/{print $(NF-1)}' /etc/supervisor/conf.d/damon.conf)
       [ "$DB_TOKEN" != "$LOCAL_TOKEN" ] && sqlite3 ${TEMP_DIR}/${FILE_PATH}data/sqlite.db "update servers set secret='${LOCAL_TOKEN}' where created_at='2023-04-23 13:02:00.770756566+08:00'"
+    fi
+  else
+    # 还原面板配置的最新信息
+    sed -i "s@^web_real_ip_header:.*@$CONFIG_REALIP@; s@^language:.*@$CONFIG_LANGUAGE@; s@client_id:.*@client_id: \"$CONFIG_CLIENTID\"@; s@client_secret:.*@client_secret: \"$CONFIG_CLIENTSECRET\"@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
+
+    # 逻辑是安装首次使用备份文件里的主题信息，之后使用本地最新的主题信息和 MaxTCPPingValue, AvgPingCount
+    [[ -n "$CONFIG_BRAND" && -n "$CONFIG_THEME" ]] &&
+    sed -i "s@sitename:.*@$CONFIG_BRAND@; s@theme:.*@$CONFIG_THEME@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
+
+    [[ "$(awk '{print $NF}' <<< "$CONFIG_AVGPINGCOUNT")" =~ ^[0-9]+$ ]] && sed -i "s@^avgpingcount:.*@$CONFIG_AVGPINGCOUNT@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
+
+    # 如果是容器版本会有本地的客户端探针，Token 将是当前部署时生成的18位随机字符串，还原的时候，会把 sqlite.db 里的历史 Token 更换为新的。
+    if [ "$IS_DOCKER" = 1 ]; then
+      [ $(type -p sqlite3) ] || apt-get -y install sqlite3
+      DB_TOKEN=$(awk -F ': ' '/^agent_secret_key:/ {print $2}' ${TEMP_DIR}/${FILE_PATH}data/config.yaml)
+      [ -n "$DB_TOKEN" ] && LOCAL_TOKEN=$(awk -F ': ' '/^client_secret:/ {print substr($2, 2, length($2)-2)}' /dashboard/agent/agent.yml)
+      [ "$DB_TOKEN" != "$LOCAL_TOKEN" ] && ID=$(awk -F ': ' '/^uuid:/ {print substr($2, 2, length($2)-2)}' /dashboard/agent/agent.yml) && sqlite3 ${TEMP_DIR}/${FILE_PATH}data/sqlite.db "update servers set uuid='${ID}' where created_at='2024-12-11 15:19:41.6189758+08:00'" && sed -i "s/^client_secret: .*/client_secret: ${DB_TOKEN}/" "/dashboard/agent/agent.yml"
     fi
   fi
 
