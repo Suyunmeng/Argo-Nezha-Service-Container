@@ -535,7 +535,7 @@ autorestart=true
 stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 EOF
-if [ -n "$ID" ] && [ "$ID" != "0" ]; then
+if [ -n "$IID" ] && [ "$IID" != "0" ]; then
     cat >> /etc/supervisor/conf.d/damon.conf << EOF
 
 [program:webapp]
