@@ -7,7 +7,7 @@ if [ ! -s /etc/supervisor/conf.d/damon.conf ]; then
   GH_PROXY='https://ghproxy.lvedong.eu.org/'
   GRPC_PROXY_PORT=443
   GRPC_PORT=8008
-  WEB_PORT=8080
+  WEB_PORT=8079
   PRO_PORT=${PRO_PORT:-'80'}
   BACKUP_TIME=${BACKUP_TIME:-'0 4 * * *'}
   CADDY_HTTP_PORT=2052
