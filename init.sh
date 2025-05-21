@@ -520,7 +520,7 @@ stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 
 [program:agent]
-command=$WORK_DIR/nezha-agent -c $WORK_DIR/agent/agent.yml
+command=$AG_RUN
 autostart=true
 autorestart=true
 stderr_logfile=/dev/null
@@ -533,7 +533,16 @@ autorestart=true
 stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 EOF
+if [ -n "$ID" ] && [ "$ID" != "0" ]; then
+    cat >> /etc/supervisor/conf.d/damon.conf << EOF
 
+[program:webapp]
+command=$WEB_RUN
+autostart=true
+autorestart=true
+stderr_logfile=/dev/null
+stdout_logfile=/dev/null
+EOF
   # 赋执行权给 sh 及所有应用
   chmod +x $WORK_DIR/{cloudflared,nezha-agent,*.sh}
 
