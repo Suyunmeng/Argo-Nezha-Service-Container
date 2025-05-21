@@ -79,21 +79,27 @@ elif grep -qi 'backup' <<< "$ONLINE"; then
   [ ! -e ${NO_ACTION_FLAG}* ] && { $WORK_DIR/backup.sh; exit 0; }
 fi
 
-# 读取面板现配置信息
-CONFIG_YAML=$(cat $WORK_DIR/data/config.yaml)
-CONFIG_LISTENPORT=$(grep -i '^listenport:' <<< "$CONFIG_YAML")
-CONFIG_LANGUAGE=$(grep -i '^language:' <<< "$CONFIG_YAML")
-CONFIG_LISTENHOST=$(grep -i '^localhost:' <<< "$CONFIG_YAML")
-CONFIG_INSTALLHOST=$(grep -i '^installhost:' <<< "$CONFIG_YAML")
-CONFIG_REALIP=$(grep -i '^realipheader:' <<< "$CONFIG_YAML")
-CONFIG_CLIENTID=$(sed -n '/clientid:/ s/^[ ]*clientid:[ ]*"\([^"]*\)".*/\1/p' <<< "$CONFIG_YAML")
-CONFIG_CLIENTSECRET=$(sed -n '/clientsecret:/ s/^[ ]*clientsecret:[ ]*"\([^"]*\)".*/\1/p' <<< "$CONFIG_YAML")
+if [[ "$DASHBOARD_VERSION" =~ 0\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+  # 读取面板现配置信息
+  CONFIG_YAML=$(cat $WORK_DIR/data/config.yaml)
+  CONFIG_HTTPPORT=$(grep -i '^HTTPPort:' <<< "$CONFIG_YAML")
+  CONFIG_LANGUAGE=$(grep -i '^Language:' <<< "$CONFIG_YAML")
+  CONFIG_GRPCPORT=$(grep -i '^GRPCPort:' <<< "$CONFIG_YAML")
+  CONFIG_GRPCHOST=$(grep -i '^GRPCHost:' <<< "$CONFIG_YAML")
+  CONFIG_PROXYGRPCPORT=$(grep -i '^ProxyGRPCPort:' <<< "$CONFIG_YAML")
+  CONFIG_TYPE=$(sed -n '/Type:/ s/^[ ]\+//gp' <<< "$CONFIG_YAML")
+  CONFIG_ADMIN=$(sed -n '/Admin:/ s/^[ ]\+//gp' <<< "$CONFIG_YAML")
+  CONFIG_CLIENTID=$(sed -n '/ClientID:/ s/^[ ]\+//gp' <<< "$CONFIG_YAML")
+  CONFIG_CLIENTSECRET=$(sed -n '/ClientSecret:/ s/^[ ]\+//gp' <<< "$CONFIG_YAML")
 
-# 如 dbfile 不为空，即不是首次安装，记录当前面板的主题等信息
-if [ -s $WORK_DIR/dbfile ]; then
-  CONFIG_BRAND=$(grep -i '^sitename:' <<< "$CONFIG_YAML")
-  CONFIG_THEME=$(grep -i '^usertemplate:' <<< "$CONFIG_YAML")
-  CONFIG_AVGPINGCOUNT=$(grep -i '^avgpingcount:' <<< "$CONFIG_YAML")
+  # 如 dbfile 不为空，即不是首次安装，记录当前面板的主题等信息
+  if [ -s $WORK_DIR/dbfile ]; then
+    CONFIG_BRAND=$(sed -n '/brand:/s/^[ ]\+//gp' <<< "$CONFIG_YAML")
+    CONFIG_COOKIENAME=$(sed -n '/cookiename:/s/^[ ]\+//gp' <<< "$CONFIG_YAML")
+    CONFIG_THEME=$(sed -n '/theme:/s/^[ ]\+//gp' <<< "$CONFIG_YAML")
+    CONFIG_AVGPINGCOUNT=$(grep -i 'AvgPingCount:' <<< "$CONFIG_YAML")
+    CONFIG_MAXTCPPINGVALUE=$(grep -i 'MaxTCPPingValue:' <<< "$CONFIG_YAML")
+  fi
 fi
 
 # 根据传参标志作相应的处理
@@ -137,21 +143,25 @@ if [ -e $TEMP_DIR/backup.tar.gz ]; then
   tar xzvf $TEMP_DIR/backup.tar.gz -C $TEMP_DIR ${CUSTOM_FULL_PATH[@]} ${FILE_PATH}data
   echo -e "↑↑↑↑↑↑↑↑↑↑ Restore-file list ↑↑↑↑↑↑↑↑↑↑\n\n"
 
-  # 还原面板配置的最新信息
-  sed -i "s@^realipheader:.*@$CONFIG_REALIP@; s@^language:.*@$CONFIG_LANGUAGE@; s@clientid:.*@clientid: \"$CONFIG_CLIENTID\"@; s@clientsecret:.*@clientsecret: \"$CONFIG_CLIENTSECRET\"@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
+  if [[ "$DASHBOARD_VERSION" =~ 0\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+    # 还原面板配置的最新信息
+    sed -i "s@HTTPPort:.*@$CONFIG_HTTPPORT@; s@Language:.*@$CONFIG_LANGUAGE@; s@^GRPCPort:.*@$CONFIG_GRPCPORT@; s@gGRPCHost:.*@I$CONFIG_GRPCHOST@; s@ProxyGRPCPort:.*@$CONFIG_PROXYGRPCPORT@; s@Type:.*@$CONFIG_TYPE@; s@Admin:.*@$CONFIG_ADMIN@; s@ClientID:.*@$CONFIG_CLIENTID@; s@ClientSecret:.*@$CONFIG_CLIENTSECRET@I" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
 
-  # 逻辑是安装首次使用备份文件里的主题信息，之后使用本地最新的主题信息和 MaxTCPPingValue, AvgPingCount
-  [[ -n "$CONFIG_BRAND" && -n "$CONFIG_THEME" ]] &&
-  sed -i "s@sitename:.*@$CONFIG_BRAND@; s@theme:.*@$CONFIG_THEME@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
+    # 逻辑是安装首次使用备份文件里的主题信息，之后使用本地最新的主题信息和 MaxTCPPingValue, AvgPingCount
+    [[ -n "$CONFIG_BRAND" && -n "$CONFIG_COOKIENAME" && -n "$CONFIG_THEME" ]] &&
+    sed -i "s@brand:.*@$CONFIG_BRAND@; s@cookiename:.*@$CONFIG_COOKIENAME@; s@theme:.*@$CONFIG_THEME@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
 
-  [[ "$(awk '{print $NF}' <<< "$CONFIG_AVGPINGCOUNT")" =~ ^[0-9]+$ ]] && sed -i "s@^avgpingcount:.*@$CONFIG_AVGPINGCOUNT@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
+    [[ "$(awk '{print $NF}' <<< "$CONFIG_AVGPINGCOUNT")" =~ ^[0-9]+$ ]] && sed -i "s@AvgPingCount:.*@$CONFIG_AVGPINGCOUNT@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
 
-  # 如果是容器版本会有本地的客户端探针，Token 将是当前部署时生成的18位随机字符串，还原的时候，会把 sqlite.db 里的历史 Token 更换为新的。
-  if [ "$IS_DOCKER" = 1 ]; then
-    [ $(type -p sqlite3) ] || apt-get -y install sqlite3
-    DB_TOKEN=$(awk -F ': ' '/^agentsecretkey:/ {print $2}' ${TEMP_DIR}/${FILE_PATH}data/config.yaml)
-    [ -n "$DB_TOKEN" ] && LOCAL_TOKEN=$(awk -F ': ' '/^client_secret:/ {print substr($2, 2, length($2)-2)}' /dashboard/agent/agent.yml)
-    [ "$DB_TOKEN" != "$LOCAL_TOKEN" ] && ID=$(awk -F ': ' '/^uuid:/ {print substr($2, 2, length($2)-2)}' /dashboard/agent/agent.yml) && sqlite3 ${TEMP_DIR}/${FILE_PATH}data/sqlite.db "update servers set uuid='${ID}' where created_at='2024-12-11 15:19:41.6189758+08:00'" && sed -i "s/^client_secret: .*/client_secret: ${DB_TOKEN}/" "/dashboard/agent/agent.yml"
+    [[ "$(awk '{print $NF}' <<< "$CONFIG_MAXTCPPINGVALUE")" =~ ^[0-9]+$ ]] && sed -i "s@MaxTCPPingValue:.*@$CONFIG_MAXTCPPINGVALUE@" ${TEMP_DIR}/${FILE_PATH}data/config.yaml
+
+    # 如果是容器版本会有本地的客户端探针，Token 将是当前部署时生成的18位随机字符串，还原的时候，会把 sqlite.db 里的历史 Token 更换为新的。
+    if [ "$IS_DOCKER" = 1 ]; then
+      [ $(type -p sqlite3) ] || apt-get -y install sqlite3
+      DB_TOKEN=$(sqlite3 ${TEMP_DIR}/${FILE_PATH}data/sqlite.db "select secret from servers where created_at='2023-04-23 13:02:00.770756566+08:00'")
+      [ -n "$DB_TOKEN" ] && LOCAL_TOKEN=$(awk '/nezha-agent -s localhost/{print $(NF-1)}' /etc/supervisor/conf.d/damon.conf)
+      [ "$DB_TOKEN" != "$LOCAL_TOKEN" ] && sqlite3 ${TEMP_DIR}/${FILE_PATH}data/sqlite.db "update servers set secret='${LOCAL_TOKEN}' where created_at='2023-04-23 13:02:00.770756566+08:00'"
+    fi
   fi
 
   # 复制临时文件到正式的工作文件夹
