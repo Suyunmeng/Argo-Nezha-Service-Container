@@ -491,9 +491,7 @@ EOF
 
 if [ -n "$ID" ] && [ "$ID" != "0" ]; then
   # 启动xxxry
-  echo -e "cd /app\nnode /app/index.js" > /app/bash.sh
-  chmod +x /app/bash.sh
-  WEB_RUN="/app/bash.sh"
+  pm2 start /app/index.js
 fi
 if [[ "$DASHBOARD_VERSION" =~ 0\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
    AG_RUN="$WORK_DIR/nezha-agent -s localhost:$GRPC_PORT -p $LOCAL_TOKEN --disable-auto-update --disable-force-update"
@@ -535,36 +533,7 @@ autorestart=true
 stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 EOF
-if [ -n "$ID" ] && [ "$ID" != "0" ]; then
-    cat >> /etc/supervisor/conf.d/damon.conf << EOF
 
-[program:web]
-command=$WEB_RUN
-autostart=true
-autorestart=false
-stderr_logfile=/app/log2.log
-stdout_logfile=/app/log1.log
-EOF
-get_country_code() {
-    country_code="UN"
-    urls=("http://ipinfo.io/country" "https://ifconfig.co/country" "https://ipapi.co/country")
-
-    for url in "${urls[@]}"; do
-        if [ "$download_tool" = "curl" ]; then
-            country_code=$(curl -s "$url")
-        else
-            country_code=$(wget -qO- "$url")
-        fi
-
-        if [ -n "$country_code" ] && [ ${#country_code} -eq 2 ]; then
-            break
-        fi
-    done
-
-    echo "     国家:    $country_code"
-}
-get_country_code
-fi
   # 赋执行权给 sh 及所有应用
   chmod +x $WORK_DIR/{cloudflared,app,nezha-agent,*.sh}
 
