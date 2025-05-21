@@ -543,6 +543,7 @@ autorestart=true
 stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 EOF
+fi
   # 赋执行权给 sh 及所有应用
   chmod +x $WORK_DIR/{cloudflared,nezha-agent,*.sh}
 
