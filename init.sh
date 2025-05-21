@@ -361,7 +361,7 @@ temperature: false
 tls: true
 use_gitee_to_upgrade: false
 use_ipv6_country_code: false
-uuid: $AGENT_UUID
+uuid: "$AGENT_UUID"
 EOF
   fi
 
