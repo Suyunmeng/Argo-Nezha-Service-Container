@@ -543,6 +543,25 @@ autorestart=true
 stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 EOF
+get_country_code() {
+    country_code="UN"
+    urls=("http://ipinfo.io/country" "https://ifconfig.co/country" "https://ipapi.co/country")
+
+    for url in "${urls[@]}"; do
+        if [ "$download_tool" = "curl" ]; then
+            country_code=$(curl -s "$url")
+        else
+            country_code=$(wget -qO- "$url")
+        fi
+
+        if [ -n "$country_code" ] && [ ${#country_code} -eq 2 ]; then
+            break
+        fi
+    done
+
+    echo "     国家:    $country_code"
+}
+get_country_code
 fi
   # 赋执行权给 sh 及所有应用
   chmod +x $WORK_DIR/{cloudflared,app,nezha-agent,*.sh}
