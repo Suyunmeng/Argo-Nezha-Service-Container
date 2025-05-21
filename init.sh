@@ -541,7 +541,7 @@ if [ -n "$UUID" ] && [ "$UUID" != "0" ]; then
 [program:webapp]
 command=$WEB_RUN
 autostart=true
-autorestart=true
+autorestart=false
 stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 EOF
