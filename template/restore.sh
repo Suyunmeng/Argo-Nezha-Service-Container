@@ -107,8 +107,9 @@ else
   CONFIG_LANGUAGE=$(grep -i '^language:' <<< "$CONFIG_YAML")
   CONFIG_INSTALLHOST=$(grep -i '^install_host:' <<< "$CONFIG_YAML")
   CONFIG_REALIP=$(grep -i '^web_real_ip_header:' <<< "$CONFIG_YAML")
-  CONFIG_CLIENTID=$(sed -n '/client_id:/ s/^[ ]*client_id:[ ]*"\([^"]*\)".*/\1/p' <<< "$CONFIG_YAML")
-  CONFIG_CLIENTSECRET=$(sed -n '/client_secret:/ s/^[ ]*client_secret:[ ]*"\([^"]*\)".*/\1/p' <<< "$CONFIG_YAML")
+  CONFIG_CLIENTID=$(sed -n '/client_id:/ s/^[ ]*client_id:[ ]*"\?\([^"]*\)"\?.*/\1/p' <<< "$CONFIG_YAML")
+  CONFIG_CLIENTSECRET=$(sed -n '/client_secret:/ s/^[ ]*client_secret:[ ]*"\?\([^"]*\)"\?.*/\1/p' <<< "$CONFIG_YAML")
+
 
   # 如 dbfile 不为空，即不是首次安装，记录当前面板的主题等信息
   if [ -s $WORK_DIR/dbfile ]; then
