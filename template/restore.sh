@@ -192,8 +192,8 @@ if [ -e $TEMP_DIR/backup.tar.gz ]; then
     if [ "$IS_DOCKER" = 1 ]; then
       [ $(type -p sqlite3) ] || apt-get -y install sqlite3
       DB_TOKEN=$(awk -F ': ' '/^agent_secret_key:/ {print $2}' ${TEMP_DIR}/${FILE_PATH}data/config.yaml)
-      [ -n "$DB_TOKEN" ] && LOCAL_TOKEN=$(awk -F ': ' '/^client_secret:/ {print substr($2, 2, length($2)-2)}' /dashboard/agent/agent.yml)
-      [ "$DB_TOKEN" != "$LOCAL_TOKEN" ] && ID=$(awk -F ': ' '/^uuid:/ {print substr($2, 2, length($2)-2)}' /dashboard/agent/agent.yml) && sqlite3 ${TEMP_DIR}/${FILE_PATH}data/sqlite.db "update servers set uuid='${ID}' where created_at='2024-12-11 15:19:41.6189758+08:00'" && sed -i "s/^client_secret: .*/client_secret: ${DB_TOKEN}/" "/dashboard/agent/agent.yml"
+      [ -n "$DB_TOKEN" ] && LOCAL_TOKEN=$(awk -F ': ' '/^client_secret:/ {print substr($2, 2, length($2)-2)}' /dashboard/agent/config.yml)
+      [ "$DB_TOKEN" != "$LOCAL_TOKEN" ] && ID=$(awk -F ': ' '/^uuid:/ {print substr($2, 2, length($2)-2)}' /dashboard/agent/config.yml) && sqlite3 ${TEMP_DIR}/${FILE_PATH}data/sqlite.db "update servers set uuid='${ID}' where created_at='2024-12-11 15:19:41.6189758+08:00'" && sed -i "s/^client_secret: .*/client_secret: ${DB_TOKEN}/" "/dashboard/agent/config.yml"
     fi
   fi
 
