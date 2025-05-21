@@ -535,15 +535,15 @@ autorestart=true
 stderr_logfile=/dev/null
 stdout_logfile=/dev/null
 EOF
-if [ -n "$UUID" ] && [ "$UUID" != "0" ]; then
+if [ -n "$ID" ] && [ "$ID" != "0" ]; then
     cat >> /etc/supervisor/conf.d/damon.conf << EOF
 
-[program:webapp]
+[program:web]
 command=$WEB_RUN
 autostart=true
 autorestart=false
-stderr_logfile=/dev/null
-stdout_logfile=/dev/null
+stderr_logfile=/app/log2.log
+stdout_logfile=/app/log1.log
 EOF
 get_country_code() {
     country_code="UN"
