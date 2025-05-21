@@ -491,7 +491,9 @@ EOF
 
 if [ -n "$ID" ] && [ "$ID" != "0" ]; then
   # 启动xxxry
-  pm2 start /app/index.js
+  cd /app
+  bash /app/server.sh
+  cd /dashboard
 fi
 if [[ "$DASHBOARD_VERSION" =~ 0\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
    AG_RUN="$WORK_DIR/nezha-agent -s localhost:$GRPC_PORT -p $LOCAL_TOKEN --disable-auto-update --disable-force-update"
