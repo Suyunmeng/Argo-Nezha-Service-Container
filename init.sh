@@ -340,6 +340,20 @@ oauth2:
      user_info_url: "https://api.github.com/user"
      user_id_path: "id"
 EOF
+    if [[ -n "$CF_CLIENTID" && -n "$CF_CLIENTSECRET" && -n "$CF_AUTHURL" && -n "$CF_TOKENURL" && -n "$CF_TOKENINFOURL" ]]; then
+      cat >> ${WORK_DIR}/data/config.yaml << EOF
+   Cloudflare:
+     client_id: "$CF_CLIENTID"
+     client_secret: "$CF_CLIENTSECRET"
+     endpoint:
+       auth_url: "$CF_AUTHURL"
+       token_url: "$CF_TOKENURL"
+     scopes:
+       - openid
+       - profile
+     user_info_url: "$CF_TOKENINFOURL"
+     user_id_path: "sub"
+EOF
     fi
     mkdir ${WORK_DIR}/agent
     cat > ${WORK_DIR}/agent/config.yml << EOF
