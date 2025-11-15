@@ -318,13 +318,13 @@ dashboard_variables() {
   # 询问版本自动后台下载
   [ -z "$DASHBOARD_VERSION" ] && reading "\n (11/12) $(text 40) " DASHBOARD_VERSION
   if [ -z "$DASHBOARD_VERSION" ]; then
-    DASHBOARD_LATEST='v0.20.13'
+    { wget -qO $TEMP_DIR/dashboard.zip ${GH_PROXY}https://github.com/nezhahq/nezha/releases/latest/download/dashboard-linux-$ARCH.zip >/dev/null 2>&1; }&
   elif [[ "$DASHBOARD_VERSION" =~ 0\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
-    DASHBOARD_LATEST=$(sed 's/[A-Za-z]//; s/^/v&/' <<< "$DASHBOARD_VERSION")
+    DASHBOARD_LATEST=$(sed 's/v//; s/^/v&/' <<< "$DASHBOARD_VERSION")
+    { wget -qO $TEMP_DIR/dashboard.zip ${GH_PROXY}https://github.com/naiba/nezha/releases/download/$DASHBOARD_LATEST/dashboard-linux-$ARCH.zip >/dev/null 2>&1; }&
   else
     error "\n $(text 42) \n"
   fi
-  { wget -qO $TEMP_DIR/dashboard.zip ${GH_PROXY}https://github.com/naiba/nezha/releases/download/$DASHBOARD_LATEST/dashboard-linux-$ARCH.zip >/dev/null 2>&1; }&
 
   [ -z "$AUTO_RENEW_OR_NOT"] && reading "\n (12/12) $(text 41) " AUTO_RENEW_OR_NOT
   grep -qiw 'n' <<< "$AUTO_RENEW_OR_NOT" && IS_AUTO_RENEW=#
@@ -343,7 +343,8 @@ install() {
     local CADDY_LATEST=$(wget -qO- "${GH_PROXY}https://api.github.com/repos/caddyserver/caddy/releases/latest" | awk -F [v\"] '/"tag_name"/{print $5}' || echo '2.7.6')
     wget -c ${GH_PROXY}https://github.com/caddyserver/caddy/releases/download/v${CADDY_LATEST}/caddy_${CADDY_LATEST}_linux_${ARCH}.tar.gz -qO- | tar xz -C $TEMP_DIR caddy >/dev/null 2>&1
     GRPC_PROXY_RUN="$WORK_DIR/caddy run --config $WORK_DIR/Caddyfile --watch"
-    cat > $TEMP_DIR/Caddyfile  << EOF
+    if [[ "$DASHBOARD_VERSION" =~ 0\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+      cat > $TEMP_DIR/Caddyfile  << EOF
 {
     http_port $CADDY_HTTP_PORT
 }
@@ -358,11 +359,49 @@ install() {
     tls $WORK_DIR/nezha.pem $WORK_DIR/nezha.key
 }
 EOF
+    else
+      cat > $TEMP_DIR/Caddyfile  << EOF
+{
+    http_port $CADDY_HTTP_PORT
+}
+
+:$GRPC_PROXY_PORT {
+    @grpcProto {
+        path /proto.NezhaService/*
+    }
+
+    reverse_proxy @grpcProto {
+        header_up Host {host}
+        header_up nz-realip {http.CF-Connecting-IP} # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
+        header_up nz-realip {remote_host} # 如果你使用caddy作为最外层，就把上面一行注释掉，启用此行
+        transport http {
+            versions h2c
+            read_buffer 4096
+        }
+        to localhost:$GRPC_PORT
+    }
+    reverse_proxy {
+        header_up Host {host}
+        header_up Origin https://{host}
+        header_up nz-realip {http.CF-Connecting-IP} # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
+        header_up nz-realip {remote_host} # 如果你使用caddy作为最外层，就把上面一行注释掉，启用此行
+        header_up Upgrade {http.upgrade}
+        header_up Connection "upgrade"
+        transport http {
+            read_buffer 16384
+        }
+        to localhost:$GRPC_PORT
+    }
+    tls $WORK_DIR/nezha.pem $WORK_DIR/nezha.key
+}
+EOF
+    fi
 
   elif [ "$REVERSE_PROXY_MODE" = 'nginx' ]; then
     [ ! -x "$(type -p nginx)" ] && ${PACKAGE_INSTALL[int]} nginx
     GRPC_PROXY_RUN="nginx -c $WORK_DIR/nginx.conf"
-    cat > $TEMP_DIR/nginx.conf  << EOF
+    if [[ "$DASHBOARD_VERSION" =~ 0\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+      cat > $TEMP_DIR/nginx.conf  << EOF
 user www-data;
 worker_processes auto;
 pid /run/nginx.pid;
@@ -393,6 +432,77 @@ http {
   }
 }
 EOF
+    else
+      cat > $TEMP_DIR/nginx.conf  << EOF
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+include /etc/nginx/modules-enabled/*.conf;
+events {
+        worker_connections 768;
+        # multi_accept on;
+}
+http {
+  upstream dashboard {
+    server localhost:$GRPC_PORT;
+    keepalive 512;
+  }
+  server {
+    listen localhost:$GRPC_PROXY_PORT ssl http2;
+    server_name $ARGO_DOMAIN;
+    ssl_certificate          $WORK_DIR/nezha.pem;
+    ssl_certificate_key      $WORK_DIR/nezha.key;
+    ssl_stapling on;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:10m; # 如果与其他配置冲突，请注释此项
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    underscores_in_headers on;
+    set_real_ip_from 0.0.0.0/0; # 替换为你的 CDN 回源 IP 地址段
+    real_ip_header CF-Connecting-IP; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
+    # 如果你使用nginx作为最外层，把上面两行注释掉
+
+    # grpc 相关    
+    location ^~ /proto.NezhaService/ {
+        grpc_set_header Host $host;
+        grpc_set_header nz-realip $http_CF_Connecting_IP; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
+        # grpc_set_header nz-realip $remote_addr; # 如果你使用nginx作为最外层，就把上面一行注释掉，启用此行
+        grpc_read_timeout 600s;
+        grpc_send_timeout 600s;
+        grpc_socket_keepalive on;
+        client_max_body_size 10m;
+        grpc_buffer_size 4m;
+        grpc_pass grpc://dashboard;
+    }
+    # websocket 相关
+    location ~* ^/api/v1/ws/(server|terminal|file)(.*)$ {
+        proxy_set_header Host $host;
+        proxy_set_header nz-realip $http_cf_connecting_ip; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
+        proxy_set_header nz-realip $remote_addr; # 如果你使用nginx作为最外层，就把上面一行注释掉，启用此行
+        proxy_set_header Origin https://$host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_pass http://127.0.0.1:$GRPC_PORT;
+    }
+    # web
+    location / {
+        proxy_set_header Host $host;
+        proxy_set_header nz-realip $http_cf_connecting_ip; # 替换为你的 CDN 提供的私有 header，此处为 CloudFlare 默认
+        proxy_set_header nz-realip $remote_addr; # 如果你使用nginx作为最外层，就把上面一行注释掉，启用此行
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffer_size 128k;
+        proxy_buffers 4 256k;
+        proxy_busy_buffers_size 256k;
+        proxy_max_temp_file_size 0;
+        proxy_pass http://127.0.0.1:$GRPC_PORT;
+    }
+  }
+}
+EOF
+    fi
   elif [ "$REVERSE_PROXY_MODE" = 'grpcwebproxy' ]; then
     wget -c ${GH_PROXY}https://github.com/fscarmen2/Argo-Nezha-Service-Container/releases/download/grpcwebproxy/grpcwebproxy-linux-$ARCH.tar.gz -qO- | tar xz -C $TEMP_DIR >/dev/null 2>&1
     chmod +x $TEMP_DIR/grpcwebproxy
@@ -445,7 +555,8 @@ EOF
     DASHBOARD_LANGUAGE='en-US'
   fi
 
-  cat > ${WORK_DIR}/data/config.yaml << EOF
+  if [[ "$DASHBOARD_VERSION" =~ 0\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+    cat > ${WORK_DIR}/data/config.yaml << EOF
 Debug: false
 HTTPPort: $WEB_PORT
 Language: $DASHBOARD_LANGUAGE
@@ -464,6 +575,48 @@ Site:
   CookieName: "nezha-dashboard" #浏览器 Cookie 字段名，可不改
   Theme: "default"
 EOF
+  else
+    LOCAL_TOKEN=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
+    AGENT_UUID=$(openssl rand -hex 16 | sed 's/\(........\)\(....\)\(....\)\(....\)\(............\)/\1-\2-\3-\4-\5/')
+    cat > ${WORK_DIR}/data/config.yaml << EOF
+agent_secret_key: $LOCAL_TOKEN
+debug: false
+listen_port: $GRPC_PORT
+language: ${DASHBOARD_LANGUAGE//-/_}
+site_name: "Nezha Probe"
+install_host: $ARGO_DOMAIN:443
+location: Asia/Shanghai
+tls: true
+EOF
+    if [[ -n "$GH_CLIENTID" && -n "$GH_CLIENTSECRET" ]]; then
+      cat >> ${WORK_DIR}/data/config.yaml << EOF
+oauth2:
+   GitHub:
+     client_id: "$GH_CLIENTID"
+     client_secret: "$GH_CLIENTSECRET"
+     endpoint:
+       auth_url: "https://github.com/login/oauth/authorize"
+       token_url: "https://github.com/login/oauth/access_token"
+     user_info_url: "https://api.github.com/user"
+     user_id_path: "id"
+EOF
+    fi
+    if [[ -n "$CF_CLIENTID" && -n "$CF_CLIENTSECRET" && -n "$CF_ORG" ]]; then
+      cat >> ${WORK_DIR}/data/config.yaml << EOF
+   Cloudflare:
+     client_id: "$CF_CLIENTID"
+     client_secret: "$CF_CLIENTSECRET"
+     endpoint:
+       auth_url: "https://$CF_ORG.cloudflareaccess.com/cdn-cgi/access/sso/oidc/$CF_CLIENTID/authorization"
+       token_url: "https://$CF_ORG.cloudflareaccess.com/cdn-cgi/access/sso/oidc/$CF_CLIENTID/token"
+     scopes:
+       - openid
+       - profile
+     user_info_url: "https://$CF_ORG.cloudflareaccess.com/cdn-cgi/access/sso/oidc/$CF_CLIENTID/userinfo"
+     user_id_path: "sub"
+EOF
+    fi
+  fi
 
   # 判断 ARGO_AUTH 为 json 还是 token
   # 如为 json 将生成 argo.json 和 argo.yml 文件
@@ -554,7 +707,7 @@ DASHBOARD_VERSION=$DASHBOARD_VERSION
 EOF
 
   # 生成 backup.sh 文件的步骤2 - 在线获取 template/bakcup.sh 模板生成完整 backup.sh 文件
-  wget -qO- ${GH_PROXY}https://raw.githubusercontent.com/fscarmen2/Argo-Nezha-Service-Container/main/template/backup.sh | sed '1,/^########/d' >> ${WORK_DIR}/backup.sh
+  wget -qO- ${GH_PROXY}https://raw.githubusercontent.com/Suyunmeng/Argo-Nezha-Service-Container/v1/template/backup.sh | sed '1,/^########/d' >> ${WORK_DIR}/backup.sh
 
   if [[ -n "$GH_BACKUP_USER" && -n "$GH_REPO" && -n "$GH_PAT" ]]; then
     # 生成还原数据脚本
@@ -578,7 +731,7 @@ IS_DOCKER=0
 ########
 EOF
     # 生成 restore.sh 文件的步骤2 - 在线获取 template/restore.sh 模板生成完整 restore.sh 文件
-    wget -qO- ${GH_PROXY}https://raw.githubusercontent.com/fscarmen2/Argo-Nezha-Service-Container/main/template/restore.sh | sed '1,/^########/d' >> ${WORK_DIR}/restore.sh
+    wget -qO- ${GH_PROXY}https://raw.githubusercontent.com/Suyunmeng/Argo-Nezha-Service-Container/v1/template/restore.sh | sed '1,/^########/d' >> ${WORK_DIR}/restore.sh
   fi
 
   # 生成 renew.sh 文件的步骤1 - 设置环境变量
@@ -593,7 +746,7 @@ TEMP_DIR=/tmp/renew
 EOF
 
   # 生成 renew.sh 文件的步骤2 - 在线获取 template/renew.sh 模板生成完整 renew.sh 文件
-  wget -qO- ${GH_PROXY}https://raw.githubusercontent.com/fscarmen2/Argo-Nezha-Service-Container/main/template/renew.sh | sed '1,/^########/d' >> ${WORK_DIR}/renew.sh
+  wget -qO- ${GH_PROXY}https://raw.githubusercontent.com/Suyunmeng/Argo-Nezha-Service-Container/v1/template/renew.sh | sed '1,/^########/d' >> ${WORK_DIR}/renew.sh
 
   # 生成定时任务: 1.每天北京时间 3:30:00 更新备份和还原文件，2.每天北京时间 4:00:00 备份一次，并重启 cron 服务； 3.每分钟自动检测在线备份文件里的内容
   if [ "$SYSTEM" = 'Alpine' ]; then
