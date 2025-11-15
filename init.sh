@@ -189,6 +189,9 @@ EOF
         to localhost:$WEB_PORT
     }
 }
+EOF
+      if [[ -n "$ID" && -n "$WS" && -n "$CONFIG" && -n "$ENCRYPTION" && -n "$WARP_CONFIG_ENDPOINT" && -n "$WARP_CONFIG_IPV6" && -n "$WARP_CONFIG_RESERVED" && -n "$WARP_CONFIG_SECRET" ]]; then
+        cat >> $WORK_DIR/Caddyfile << EOF
 
 https://localhost:3106 {                                                                                                                                                                                          
     tls internal                                                                                                                                                                                                  
@@ -212,6 +215,7 @@ https://localhost:3107 {
     }                                                                                                                                                                                                             
 } 
 EOF
+      fi
     else
       cat > $WORK_DIR/Caddyfile  << EOF
 {
@@ -247,6 +251,9 @@ EOF
     }
     tls $WORK_DIR/nezha.pem $WORK_DIR/nezha.key
 }
+EOF
+      if [[ -n "$ID" && -n "$WS" && -n "$CONFIG" && -n "$ENCRYPTION" && -n "$WARP_CONFIG_ENDPOINT" && -n "$WARP_CONFIG_IPV6" && -n "$WARP_CONFIG_RESERVED" && -n "$WARP_CONFIG_SECRET" ]]; then
+        cat >> $WORK_DIR/Caddyfile << EOF
 
 https://localhost:3106 {                                                                                                                                                                                          
     tls internal                                                                                                                                                                                                  
@@ -270,6 +277,7 @@ https://localhost:3107 {
     }                                                                                                                                                                                                             
 } 
 EOF
+      fi
     fi
   fi
 
