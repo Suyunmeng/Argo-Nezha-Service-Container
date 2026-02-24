@@ -330,6 +330,8 @@ EOF
 agent_secret_key: $LOCAL_TOKEN
 debug: false
 listen_port: $GRPC_PORT
+tsdb:
+    data_path: "data/tsdb"
 language: zh-CN
 site_name: "Nezha Probe"
 install_host: $ARGO_DOMAIN:$GRPC_PROXY_PORT
